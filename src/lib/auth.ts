@@ -1,7 +1,10 @@
 import { betterAuth } from 'better-auth';
 import { Pool } from 'pg';
-import { customSession } from 'better-auth/plugins';
+import { customSession, jwt } from 'better-auth/plugins';
 import { sendEmail } from './utils/email';
+import { fetchUserRole } from './utils/fetch-roles';
+import { authClient } from './auth-client';
+import { da } from 'zod/v4/locales';
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -12,14 +15,15 @@ const pool = new Pool({
 });
 
 export const auth = betterAuth({
+  secret: process.env.BETTER_AUTH_SECRET!,
   database: pool,
+
   emailVerification: {
     sendOnSignUp: true,
-    requireEmailVerification: true,
     autoSignInAfterVerification: true,
     sendVerificationEmail: async ({ user, url, token }, request) => {
       await sendEmail({
-        purpose: 'verify-email',
+        purpose: 'email-verification',
         email: user.email,
         url: `${url}?token=${token}`
       });
@@ -30,15 +34,17 @@ export const auth = betterAuth({
     }
   },
   emailAndPassword: {
+    requireEmailVerification: true,
+
     enabled: true,
-    sendResetPassword: async ({ user, url, token }, request) => {
+    sendResetPassword: async ({ user, url, token }) => {
       await sendEmail({
         purpose: 'reset-password',
         email: user.email,
         url: `${url}?token=${token}`
       });
     },
-    onPasswordReset: async ({ user }, request) => {
+    onPasswordReset: async ({ user }) => {
       // your logic here
       console.log(`Password for user ${user.email} has been reset.`);
     }
@@ -73,13 +79,14 @@ export const auth = betterAuth({
     }
   },
   plugins: [
+    jwt(),
     customSession(async ({ user, session }) => {
-      // const roles = findUserRoles(session.session.userId);
+      const role = await fetchUserRole(user.id);
+
       return {
-        // roles,
         user: {
           ...user,
-          newField: 'newField'
+          role: role
         },
         session
       };

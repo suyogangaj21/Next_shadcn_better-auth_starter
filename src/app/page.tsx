@@ -6,6 +6,7 @@ export default async function Page() {
   const session = await auth.api.getSession({
     headers: await headers() // you need to pass the headers object.
   });
+  console.log('Session on the home page:', session?.session);
 
   if (!session?.user.id) {
     return redirect('/auth/sign-in');

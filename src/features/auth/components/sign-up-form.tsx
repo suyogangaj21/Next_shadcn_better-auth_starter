@@ -14,7 +14,16 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { FcGoogle } from 'react-icons/fc';
-import { Eye, EyeOff, User, Mail, Lock } from 'lucide-react';
+import {
+  Eye,
+  EyeOff,
+  User,
+  Mail,
+  Lock,
+  CheckCircle,
+  ArrowLeft,
+  RefreshCw
+} from 'lucide-react';
 import {
   Form,
   FormControl,
@@ -36,6 +45,12 @@ export function SignUpForm({
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Add email verification states
+  const [emailSent, setEmailSent] = useState(false);
+  const [userEmail, setUserEmail] = useState('');
+  const [isResending, setIsResending] = useState(false);
+  const [resendCount, setResendCount] = useState(0);
 
   const SignUpValidation = z
     .object({
@@ -68,6 +83,36 @@ export function SignUpForm({
 
   const toggleConfirmPasswordVisibility = () => {
     setShowConfirmPassword(!showConfirmPassword);
+  };
+
+  // Handle resend email
+  const handleResendEmail = async () => {
+    if (resendCount >= 3) {
+      toast.error('Maximum resend attempts reached. Please try again later.');
+      return;
+    }
+
+    setIsResending(true);
+
+    try {
+      // Call your resend verification email API
+      const response = await authClient.sendVerificationEmail({
+        email: userEmail,
+        callbackURL: '/auth/verify-email'
+      });
+
+      if (response.error) {
+        toast.error('Failed to resend verification email. Please try again.');
+      } else {
+        toast.success('Verification email sent successfully!');
+        setResendCount((prev) => prev + 1);
+      }
+    } catch (error) {
+      console.error('Error resending email:', error);
+      toast.error('Failed to resend verification email. Please try again.');
+    } finally {
+      setIsResending(false);
+    }
   };
 
   async function signUpGoogle() {
@@ -112,10 +157,10 @@ export function SignUpForm({
       }
 
       if (data) {
-        toast.success(
-          'Account created successfully! Please check your email to verify your account.'
-        );
-        router.push('/auth/sign-in');
+        // Show email verification component instead of redirecting
+        setUserEmail(email);
+        setEmailSent(true);
+        toast.success('Account created! Please check your email to verify.');
       }
     } catch (error: any) {
       console.error('Network error:', error);
@@ -125,6 +170,129 @@ export function SignUpForm({
     }
   }
 
+  // Email Verification Sent Component (inline)
+  if (emailSent) {
+    return (
+      <div className={cn('flex w-full flex-col gap-6', className)} {...props}>
+        <Card className='w-full'>
+          <CardHeader className='space-y-4 text-center'>
+            {/* Email Icon */}
+            <div className='mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30'>
+              <Mail className='h-8 w-8 text-green-600 dark:text-green-400' />
+            </div>
+
+            <div className='space-y-2'>
+              <CardTitle className='text-2xl'>Check Your Email</CardTitle>
+              <CardDescription className='text-base'>
+                We&apos;ve sent a verification link to
+              </CardDescription>
+              <p className='text-foreground font-medium'>{userEmail}</p>
+            </div>
+          </CardHeader>
+
+          <CardContent className='space-y-6'>
+            {/* Instructions */}
+            <div className='bg-muted/50 rounded-lg p-4'>
+              <div className='flex items-start gap-3'>
+                <CheckCircle className='mt-0.5 h-5 w-5 flex-shrink-0 text-green-600 dark:text-green-400' />
+                <div className='space-y-2 text-sm'>
+                  <p className='font-medium'>Next steps:</p>
+                  <ol className='text-muted-foreground list-inside list-decimal space-y-1'>
+                    <li>Check your email inbox (and spam folder)</li>
+                    <li>Click the verification link in the email</li>
+                    <li>You&apos;ll be automatically signed in</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className='space-y-3'>
+              <Button
+                type='button'
+                variant='outline'
+                className='w-full'
+                onClick={handleResendEmail}
+                disabled={isResending || resendCount >= 3}
+              >
+                {isResending ? (
+                  <>
+                    <RefreshCw className='mr-2 h-4 w-4 animate-spin' />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Mail className='mr-2 h-4 w-4' />
+                    Resend Verification Email
+                  </>
+                )}
+              </Button>
+
+              {resendCount > 0 && (
+                <p className='text-muted-foreground text-center text-xs'>
+                  Email sent {resendCount} time{resendCount > 1 ? 's' : ''}
+                  {resendCount >= 3 && ' (Maximum reached)'}
+                </p>
+              )}
+
+              <Button
+                type='button'
+                variant='ghost'
+                className='w-full'
+                onClick={() => {
+                  setEmailSent(false);
+                  setUserEmail('');
+                  setResendCount(0);
+                }}
+              >
+                <ArrowLeft className='mr-2 h-4 w-4' />
+                Back to Sign Up
+              </Button>
+            </div>
+
+            {/* Alternative Actions */}
+            <div className='border-t pt-4'>
+              <p className='text-muted-foreground mb-3 text-center text-sm'>
+                Having trouble?
+              </p>
+              <div className='flex flex-col gap-2 text-sm sm:flex-row'>
+                <Link
+                  href='/auth/sign-in'
+                  className='hover:text-foreground flex-1 text-center underline underline-offset-4'
+                >
+                  Try signing in instead
+                </Link>
+                <Link
+                  href='/support'
+                  className='hover:text-foreground flex-1 text-center underline underline-offset-4'
+                >
+                  Contact support
+                </Link>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Footer */}
+        <div className='w-full text-center text-sm'>
+          <div className='flex w-full flex-wrap items-center justify-center gap-1'>
+            <span>
+              Didn&apos;t receive the email? Check your spam folder or{' '}
+            </span>
+            <button
+              onClick={handleResendEmail}
+              disabled={isResending || resendCount >= 3}
+              className='hover:text-foreground underline underline-offset-4 disabled:cursor-not-allowed disabled:opacity-50'
+            >
+              try again
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Original Sign Up Form
   return (
     <div className={cn('flex w-full flex-col gap-6', className)} {...props}>
       <Card className='w-full'>
